@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Realtime User Activity</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+</head>
+<body>
+<!-- 예시 입력 필드 -->
+
+<div id="pointerContainer" style="position: relative; width: 100%; height: 500px; border: 1px solid">
+    <label for="inputBox"></label><input type="text" id="inputBox">
+</div>
+<script type="text/javascript">
+  var stompClient = null;
+  let myVariable = "username";
+  let randomNumber = Math.floor(Math.random() * 100); // 0부터 99 사이의 난수 생성
+  myVariable += randomNumber;
+  const inputBox = document.getElementById('inputBox')
+  function getRandomColor() {
+    // 0부터 255까지의 랜덤한 숫자 생성
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+
+    // RGB 값을 문자열 형태로 반환
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  function connect() {
+    var socket = new SockJS('/ws');
+    stompClient = Stomp.over(socket);
+    stompClient.connect({}, function (frame) {
+      // 사용자 활동을 구독합니다.
+      stompClient.subscribe('/topic/userActivity', function (activity) {
+        var userActivity = JSON.parse(activity.body);
+        if (userActivity.type === 'POINTER_MOVE') {
+          displayPointer(userActivity.username, userActivity.data);
+        }
+        if (userActivity.type === 'INPUT_STOP') {
+          inputBox.value = userActivity.data?.value || "test";
+        }
+      });
+    });
+  }
+
+  function displayPointer(username, data) {
+    let pointer = document.getElementById(`pointer-${username}`);
+    if (!pointer) {
+      pointer = document.createElement('div');
+      pointer.id = `pointer-${username}`;
+      pointer.innerText = myVariable;
+      pointer.style.position = 'absolute';
+      pointer.style.color = getRandomColor();
+      pointer.style.backgroundColor = data.color;
+      pointer.style.borderRadius = '50%';
+      pointer.style.width = '20px';
+      pointer.style.height = '20px';
+      pointer.style.textAlign = 'center';
+      pointer.style.lineHeight = '20px';
+      const pointerContainer = document.getElementById('pointerContainer'); // 마우스 포인터를 표시할 영역의 ID
+      pointerContainer.appendChild(pointer);
+    }
+    pointer.style.left = `${data.x}px`;
+    pointer.style.top = `${data.y}px`;
+  }
+
+  // 이벤트 리스너 설정
+  document.addEventListener('mousemove', (event) => {
+    var pointerData = { x: event.pageX, y: event.pageY };
+    stompClient.send("/app/userActivity", {}, JSON.stringify({
+      username: myVariable,
+      type: 'POINTER_MOVE',
+      data: pointerData
+    }));
+  });
+
+
+  inputBox.addEventListener('focus', (e) => {
+    stompClient.send("/app/userActivity", {}, JSON.stringify({
+      username: myVariable,
+      type: 'INPUT_START',
+      data: {value : e.target.value},
+    }));
+  });
+  inputBox.addEventListener('blur', (e) => {
+    stompClient.send("/app/userActivity", {}, JSON.stringify({
+      username: myVariable,
+      type: 'INPUT_STOP',
+      data: {value : e.target.value},
+    }));
+  });
+
+  connect();
+</script>
+</body>
+</html>
